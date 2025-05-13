@@ -45,19 +45,21 @@ public class MatrixBenchmark {
                 isCalculating[i][j] = new AtomicBoolean(false);
     }
 
-    // Тест для традиційного пулу потоків
+
+    // Традиційний пул потоків
     @Benchmark
     public void benchmarkTraditionalThreadPool() throws InterruptedException {
-        ExecutorService executor = Executors.newFixedThreadPool(p);
-        executeMultiplication(executor);
+        ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        multiplyMatrixWithExecutor(executor);
     }
 
-    // Тест для віртуальних потоків (необмежено)
+    // Необмежені віртуальні потоки
     @Benchmark
     public void benchmarkVirtualThreadsUnlimited() throws InterruptedException {
         ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-        executeMultiplication(executor);
+        multiplyMatrixWithExecutor(executor);
     }
+
 
 
     // Тест для віртуальних потоків з обмеженням за допомогою семафору
@@ -99,16 +101,26 @@ public class MatrixBenchmark {
         executor.awaitTermination(1, TimeUnit.MINUTES);
     }
 
+    private void multiplyMatrixWithExecutor(ExecutorService executor) throws InterruptedException {
+        int totalTasks = m * k;
+        CountDownLatch latch = new CountDownLatch(totalTasks);
 
-    // Метод виконання множення матриць (з використанням пулу потоків)
-    private void executeMultiplication(ExecutorService executor) throws InterruptedException {
-        CountDownLatch latch = new CountDownLatch(p);
-        for (int i = 0; i < p; i++) {
-            executor.submit(() -> {
-                calculateCells();
-                latch.countDown();
-            });
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < k; j++) {
+                final int row = i;
+                final int col = j;
+
+                executor.submit(() -> {
+                    int sum = 0;
+                    for (int l = 0; l < n; l++) {
+                        sum += A[row][l] * B[l][col];
+                    }
+                    C[row][col] = sum;
+                    latch.countDown();
+                });
+            }
         }
+
         latch.await();
         executor.shutdown();
         executor.awaitTermination(1, TimeUnit.MINUTES);
